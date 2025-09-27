@@ -1,9 +1,10 @@
-import { getBearerToken, validateJWT } from '../auth';
-import { respondWithJSON } from './json';
-import { getVideo, updateVideo } from '../db/videos';
-import type { ApiConfig } from '../config';
 import type { BunRequest } from 'bun';
+import { getBearerToken, validateJWT } from '../auth';
+import type { ApiConfig } from '../config';
+import { getVideo, updateVideo } from '../db/videos';
+import { getAssetDiskPath, getAssetURL, mediaTypeToExt } from './assets';
 import { BadRequestError, NotFoundError, UserForbiddenError } from './errors';
+import { respondWithJSON } from './json';
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
@@ -30,8 +31,13 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   }
 
   const mediaType = thumbnail.type;
+
+  const extension = mediaTypeToExt(mediaType);
+  const fileName = `${videoId}.${extension}`;
+  const filePath = getAssetDiskPath(cfg, fileName);
   const thumbnailData = await thumbnail.arrayBuffer();
-  const thumbnailBase64 = Buffer.from(thumbnailData).toString('base64');
+
+  await Bun.write(filePath, thumbnailData);
 
   const video = await getVideo(cfg.db, videoId);
 
@@ -43,7 +49,7 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new UserForbiddenError('the user is not the owner of the video');
   }
 
-  const thumbnailURL = `data:${mediaType};base64,${thumbnailBase64}`;
+  const thumbnailURL = getAssetURL(cfg, fileName);
   video.thumbnailURL = thumbnailURL;
 
   updateVideo(cfg.db, video);
