@@ -30,7 +30,12 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new BadRequestError('Max upload size exceeded');
   }
 
+  const allowedMimeTypes = ['image/jpeg', 'image/png'];
+
   const mediaType = thumbnail.type;
+  if (!allowedMimeTypes.includes(mediaType)) {
+    throw new BadRequestError(`Not valid MIME type`);
+  }
 
   const extension = mediaTypeToExt(mediaType);
   const fileName = `${videoId}.${extension}`;
