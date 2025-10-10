@@ -21,6 +21,14 @@ export function getAssetDiskPath(cfg: ApiConfig, assetPath: string) {
   return path.join(cfg.assetsRoot, assetPath);
 }
 
+export function getAssetTempPath(assetPath: string) {
+  return path.join(`/tmp/`, assetPath);
+}
+
 export function getAssetURL(cfg: ApiConfig, assetPath: string) {
   return `http://localhost:${cfg.port}/assets/${assetPath}`;
+}
+
+export function getBucketObjectURL(cfg: ApiConfig, key: string) {
+  return `https://${cfg.s3Bucket}.s3.${cfg.s3Region}.amazonaws.com/${key}`;
 }
