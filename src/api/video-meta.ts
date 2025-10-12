@@ -1,9 +1,9 @@
-import { type ApiConfig } from "../config";
-import { getBearerToken, validateJWT } from "../auth";
-import { createVideo, deleteVideo, getVideo, getVideos } from "../db/videos";
-import { respondWithJSON } from "./json";
-import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
-import type { BunRequest } from "bun";
+import type { BunRequest } from 'bun';
+import { getBearerToken, validateJWT } from '../auth';
+import { type ApiConfig } from '../config';
+import { createVideo, deleteVideo, getVideo, getVideos } from '../db/videos';
+import { BadRequestError, NotFoundError, UserForbiddenError } from './errors';
+import { respondWithJSON } from './json';
 
 export async function handlerVideoMetaCreate(cfg: ApiConfig, req: Request) {
   const token = getBearerToken(req.headers);
@@ -11,7 +11,7 @@ export async function handlerVideoMetaCreate(cfg: ApiConfig, req: Request) {
 
   const { title, description } = await req.json();
   if (!title || !description) {
-    throw new BadRequestError("Missing title or description");
+    throw new BadRequestError('Missing title or description');
   }
 
   const video = createVideo(cfg.db, {
@@ -26,7 +26,7 @@ export async function handlerVideoMetaCreate(cfg: ApiConfig, req: Request) {
 export async function handlerVideoMetaDelete(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
   if (!videoId) {
-    throw new BadRequestError("Invalid video ID");
+    throw new BadRequestError('Invalid video ID');
   }
 
   const token = getBearerToken(req.headers);
@@ -37,7 +37,7 @@ export async function handlerVideoMetaDelete(cfg: ApiConfig, req: BunRequest) {
     throw new NotFoundError("Couldn't find video");
   }
   if (video.userID !== userID) {
-    throw new UserForbiddenError("Not authorized to delete this video");
+    throw new UserForbiddenError('Not authorized to delete this video');
   }
 
   deleteVideo(cfg.db, videoId);
@@ -47,7 +47,7 @@ export async function handlerVideoMetaDelete(cfg: ApiConfig, req: BunRequest) {
 export async function handlerVideoGet(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
   if (!videoId) {
-    throw new BadRequestError("Invalid video ID");
+    throw new BadRequestError('Invalid video ID');
   }
 
   const video = getVideo(cfg.db, videoId);
@@ -64,4 +64,48 @@ export async function handlerVideosRetrieve(cfg: ApiConfig, req: Request) {
 
   const videos = getVideos(cfg.db, userID);
   return respondWithJSON(200, videos);
+}
+
+export async function getVideoAspectRatio(filePath: string) {
+  const proc = Bun.spawn([
+    'ffprobe',
+    '-v',
+    'error',
+    '-select_streams',
+    'v:0',
+    '-show_entries',
+    'stream=width,height',
+    '-of',
+    'json',
+    filePath,
+  ]);
+
+  await proc.exited;
+
+  const outputText = await new Response(proc.stdout).text();
+  const outputError = await new Response(proc.stderr).text();
+
+  if (proc.exitCode !== 0) {
+    throw new Error(`ffprobe error: ${outputError}`);
+  }
+
+  const output = JSON.parse(outputText);
+
+  if (!output.streams || output.streams.length === 0) {
+    throw new Error('No video streams found');
+  }
+
+  const { width, height } = output.streams[0];
+
+  const ratio = width / height;
+  const tolerance = 0.01;
+
+  if (Math.abs(ratio - 16 / 9) < tolerance) {
+    return 'landscape';
+  }
+  if (Math.abs(ratio - 9 / 16) < tolerance) {
+    return 'portrait';
+  }
+
+  return 'other';
 }
