@@ -7,7 +7,7 @@ import { getBearerToken, validateJWT } from '../auth';
 import { getVideo, updateVideo } from '../db/videos';
 import { getAssetTempPath, getBucketObjectURL, mediaTypeToExt } from './assets';
 import { randomBytes } from 'crypto';
-import { getVideoAspectRatio } from './video-meta';
+import { getVideoAspectRatio, processVideoForFastStart } from './video-meta';
 
 export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
@@ -60,12 +60,13 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const aspectRatio = await getVideoAspectRatio(filePath);
   const key = `${aspectRatio}/${fileName}`;
 
-  const videoFile = Bun.file(filePath);
+  const processedVideoFilePath = await processVideoForFastStart(filePath);
+  const processedVideoFile = Bun.file(processedVideoFilePath);
 
   const s3File = cfg.s3Client.file(key, {
-    type: videoFile.type,
+    type: processedVideoFile.type,
   });
-  await s3File.write(videoFileData);
+  await s3File.write(processedVideoFile);
 
   const videoURL = getBucketObjectURL(cfg, key);
   videoData.videoURL = videoURL;
@@ -73,6 +74,7 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   updateVideo(cfg.db, videoData);
 
   await Bun.file(filePath).delete();
+  await Bun.file(processedVideoFilePath).delete();
 
   return respondWithJSON(200, null);
 }
