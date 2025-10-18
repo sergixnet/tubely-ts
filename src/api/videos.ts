@@ -1,12 +1,16 @@
 import { respondWithJSON } from './json';
 
-import { type ApiConfig } from '../config';
 import type { BunRequest } from 'bun';
-import { BadRequestError, NotFoundError, UserForbiddenError } from './errors';
-import { getBearerToken, validateJWT } from '../auth';
-import { getVideo, updateVideo } from '../db/videos';
-import { getAssetTempPath, getBucketObjectURL, mediaTypeToExt } from './assets';
 import { randomBytes } from 'crypto';
+import { getBearerToken, validateJWT } from '../auth';
+import { type ApiConfig } from '../config';
+import { getVideo, updateVideo } from '../db/videos';
+import {
+  dbVideoToSignedVideo,
+  getAssetTempPath,
+  mediaTypeToExt,
+} from './assets';
+import { BadRequestError, NotFoundError, UserForbiddenError } from './errors';
 import { getVideoAspectRatio, processVideoForFastStart } from './video-meta';
 
 export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
@@ -68,13 +72,14 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   });
   await s3File.write(processedVideoFile);
 
-  const videoURL = getBucketObjectURL(cfg, key);
-  videoData.videoURL = videoURL;
+  videoData.videoURL = key;
 
   updateVideo(cfg.db, videoData);
 
   await Bun.file(filePath).delete();
   await Bun.file(processedVideoFilePath).delete();
 
-  return respondWithJSON(200, null);
+  const result = dbVideoToSignedVideo(cfg, videoData);
+
+  return respondWithJSON(200, result);
 }
